@@ -135,6 +135,9 @@ oc apply -f dsri/service.yaml
 oc apply -f dsri/deployment.yaml
 ```
 
+The deployment follows the DSRI GPU enablement requirement by setting
+`nvidia.com/gpu: "1"` in both container resource requests and limits.
+
 The deployment defaults to:
 
 ```text
@@ -147,6 +150,22 @@ during a booked GPU window:
 ```bash
 oc scale deployment/datasight-vllm-gpu --replicas=1
 ```
+
+After scaling, confirm DSRI attached the GPU to the running container:
+
+```bash
+oc exec -n ub-datasight deployment/datasight-vllm-gpu -- nvidia-smi
+```
+
+If the live deployment was created before GPU resources were added, patch it
+after the DSRI booking is active:
+
+```bash
+oc patch deployment/datasight-vllm-gpu -n ub-datasight --type=json -p='[{"op":"replace","path":"/spec/template/spec/containers/0/resources","value":{"requests":{"cpu":"4","memory":"32Gi","nvidia.com/gpu":"1"},"limits":{"cpu":"16","memory":"128Gi","nvidia.com/gpu":"1"}}}]'
+```
+
+On Windows PowerShell, use escaped double quotes instead of single quotes if
+your shell cannot parse the JSON patch.
 
 After testing:
 
@@ -170,6 +189,8 @@ VLLM_CACHE_ROOT=/hf-cache/vllm
 TRITON_CACHE_DIR=/hf-cache/triton
 TORCHINDUCTOR_CACHE_DIR=/hf-cache/torchinductor
 HOME=/tmp
+USER=datasight
+LOGNAME=datasight
 PYTHONPYCACHEPREFIX=/tmp/pycache
 VLLM_START_MODE=serve
 ```

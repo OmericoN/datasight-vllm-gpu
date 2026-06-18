@@ -49,6 +49,10 @@ spec:
               value: /hf-cache/torchinductor
             - name: HOME
               value: /tmp
+            - name: USER
+              value: datasight
+            - name: LOGNAME
+              value: datasight
             - name: PYTHONPYCACHEPREFIX
               value: /tmp/pycache
           volumeMounts:

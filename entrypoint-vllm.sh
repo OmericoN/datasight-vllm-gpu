@@ -16,6 +16,8 @@ export VLLM_CACHE_ROOT="${VLLM_CACHE_ROOT:-${HF_HOME}/vllm}"
 export TRITON_CACHE_DIR="${TRITON_CACHE_DIR:-${HF_HOME}/triton}"
 export TORCHINDUCTOR_CACHE_DIR="${TORCHINDUCTOR_CACHE_DIR:-${HF_HOME}/torchinductor}"
 export HOME="${HOME:-/tmp}"
+export USER="${USER:-datasight}"
+export LOGNAME="${LOGNAME:-${USER}}"
 export PYTHONPYCACHEPREFIX="${PYTHONPYCACHEPREFIX:-/tmp/pycache}"
 
 ensure_writable_cache() {
@@ -62,6 +64,8 @@ echo "VLLM_CACHE_ROOT=${VLLM_CACHE_ROOT}"
 echo "TRITON_CACHE_DIR=${TRITON_CACHE_DIR}"
 echo "TORCHINDUCTOR_CACHE_DIR=${TORCHINDUCTOR_CACHE_DIR}"
 echo "HOME=${HOME}"
+echo "USER=${USER}"
+echo "LOGNAME=${LOGNAME}"
 echo "VLLM_DTYPE=${VLLM_DTYPE}"
 echo "VLLM_START_MODE=${VLLM_START_MODE}"
 
