@@ -31,6 +31,8 @@ spec:
               value: Qwen/Qwen2.5-0.5B-Instruct
             - name: VLLM_DTYPE
               value: auto
+            - name: VLLM_DEVICE
+              value: cuda
             - name: VLLM_START_MODE
               value: serve
             - name: HF_HOME
