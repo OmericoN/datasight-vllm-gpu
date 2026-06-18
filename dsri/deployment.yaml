@@ -32,7 +32,7 @@ spec:
             - name: VLLM_DTYPE
               value: auto
             - name: VLLM_START_MODE
-              value: hold
+              value: serve
             - name: HF_HOME
               value: /hf-cache
             - name: HUGGINGFACE_HUB_CACHE
@@ -56,6 +56,22 @@ spec:
               mountPath: /hf-cache
             - name: shm
               mountPath: /dev/shm
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 180
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 12
           resources:
             requests:
               cpu: "4"

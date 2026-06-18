@@ -70,6 +70,11 @@ if [[ "${VLLM_START_MODE}" == "hold" ]]; then
   exec tail -f /dev/null
 fi
 
+if [[ "${VLLM_START_MODE}" != "serve" ]]; then
+  echo "ERROR: VLLM_START_MODE must be either 'hold' or 'serve'. Got '${VLLM_START_MODE}'."
+  exit 2
+fi
+
 args=(
   --host "${HOST}"
   --port "${PORT}"

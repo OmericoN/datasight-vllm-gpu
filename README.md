@@ -171,6 +171,7 @@ TRITON_CACHE_DIR=/hf-cache/triton
 TORCHINDUCTOR_CACHE_DIR=/hf-cache/torchinductor
 HOME=/tmp
 PYTHONPYCACHEPREFIX=/tmp/pycache
+VLLM_START_MODE=serve
 ```
 
 Optional:
@@ -190,6 +191,10 @@ It does not start vLLM, call Python, or download a model. Use this to confirm
 that the image, OpenShift security context, PVC mount, and GPU scheduling keep a
 pod alive. Set `VLLM_START_MODE=serve` to start vLLM again after the container
 runtime is validated.
+
+The deployment now defaults to `VLLM_START_MODE=serve` with the small validation
+model. Keep this model until `/health`, `/v1/models`, and one tiny chat request
+work through the CPU gateway.
 
 ## Gateway Integration
 
