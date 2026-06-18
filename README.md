@@ -1,67 +1,10 @@
 # datasight-vllm-gpu
 
-Private DSRI/OpenShift GPU backend for the public
+This repository is deployed on the DSRI OpenShift cluster. It serves as the private GPU backend for the public
 [`datasight-llm-server`](https://github.com/OmericoN/datasight-llm-server)
-CPU gateway.
+CPU gateway. It will pull models from vLLM.
 
-This repository intentionally contains only the vLLM image and DSRI deployment
-manifests. Do not copy the CPU gateway application code into this repository.
 
-## Architecture
-
-```text
-Public internet / DataSight client
-  -> datasight-llm-server
-     CPU-only FastAPI gateway
-     public DSRI Route
-     API keys, rate limits, usage monitoring
-
-OpenShift internal network
-  -> datasight-vllm-gpu
-     private vLLM OpenAI-compatible backend
-     no public Route
-     nvidia.com/gpu: 1 only on this deployment
-```
-
-The CPU gateway calls this backend through the OpenShift internal Service:
-
-```text
-http://datasight-vllm-gpu:8000
-```
-
-The GPU backend is not the public authentication boundary. The public boundary
-is `datasight-llm-server`. Backend-side authentication can still be enabled for
-defense in depth, but the backend secret must only be configured on the CPU
-gateway.
-
-## Files
-
-```text
-datasight-vllm-gpu/
-├── Dockerfile
-├── entrypoint-vllm.sh
-├── README.md
-└── dsri/
-    ├── deployment.yaml
-    ├── service.yaml
-    └── pvc.yaml
-```
-
-No OpenShift Route is provided for `datasight-vllm-gpu` by default.
-
-## Image
-
-The image is based on the official vLLM OpenAI server image:
-
-```dockerfile
-FROM vllm/vllm-openai:latest
-```
-
-The container listens on `0.0.0.0:8000` and starts:
-
-```bash
-python -m vllm.entrypoints.openai.api_server
-```
 
 Default validation model:
 
@@ -82,96 +25,37 @@ Qwen/Qwen2.5-32B-Instruct-AWQ
 Switch to the 32B AWQ model only after the small model is healthy through the
 CPU gateway.
 
-## CrashLoopBackOff Triage
+## Developer Quick Guide
+> This guide assumes you have access to the `ub-datasight` project and logged in via `oc login`.
 
-If the pod is scheduled, the image is pulled, and the container is started, then
-`CrashLoopBackOff` means the vLLM process is exiting. Get the previous
-container log before scaling down or redeploying:
+### Starting the GPU Backend
+- Schedule a GPU time window via ['DSRI GPU Calendar'](https://dsri.maastrichtuniversity.nl/gpu-booking)
+- Start the GPU in `hold` mode (for safety):
+  ```bash
+  oc set env -n ub-datasight deployment/datasight-vllm-gpu VLLM_START_MODE=hold
+  oc scale -n ub-datasight deployment/datasight-vllm-gpu --replicas=1
+  ```
+- Check GPU attachement:
+  ```bash
+  oc exec -n ub-datasight deployment/datasight-vllm-gpu -- sh -lc 'ls -l /dev/nvidia* 2>/dev/null || echo no-nvidia-devices'
+  ```
+- If GPU is available, switch to `serve mode` and restart rollout:
+  ```bash
+  oc set env -n ub-datasight deployment/datasight-vllm-gpu VLLM_START_MODE=serve
+  oc rollout restart -n ub-datasight deployment/datasight-vllm-gpu
+  ```
 
-```bash
-oc logs -n ub-datasight deployment/datasight-vllm-gpu --previous
-```
+### Gracefully Shutting Down GPU Service
+- Switch back to the safety `hold` mode:
+  ```bash
+  oc set env -n ub-datasight deployment/datasight-vllm-gpu VLLM_START_MODE=hold
+  ```
+- Scale down to 0 replicas:
+  ```bash
+  oc scale -n ub-datasight deployment/datasight-vllm-gpu --replicas=0
+  ```
 
-If the pod name is needed:
 
-```bash
-oc get pods -n ub-datasight -l app=datasight-vllm-gpu
-oc logs -n ub-datasight pod/<pod-name> --previous
-```
-
-Common first failures:
-
-- `/hf-cache` is not writable by OpenShift's arbitrary container UID. The
-  entrypoint now falls back to `/tmp/hf-cache` so startup can continue, but
-  persistent caching requires fixing PVC permissions.
-- The selected model is too large for the booked GPU or vLLM runtime settings.
-  Validate with `Qwen/Qwen2.5-0.5B-Instruct` first, then move to the 32B AWQ
-  model.
-- The image tag changed underneath `vllm/vllm-openai:latest`. Pin the base image
-  once a working runtime version is confirmed.
-
-## OpenShift Project Namespace
-
-`dsri/deployment.yaml` currently references this internal OpenShift image:
-
-```text
-image-registry.openshift-image-registry.svc:5000/ub-datasight/datasight-vllm-gpu:latest
-```
-
-If the DSRI project namespace is not `ub-datasight`, replace the namespace segment
-before deploying:
-
-```text
-image-registry.openshift-image-registry.svc:5000/<project>/datasight-vllm-gpu:latest
-```
-
-## DSRI Resources
-
-Apply the PVC, Service, and Deployment:
-
-```bash
-oc apply -f dsri/pvc.yaml
-oc apply -f dsri/service.yaml
-oc apply -f dsri/deployment.yaml
-```
-
-The deployment follows the DSRI GPU enablement requirement by setting
-`nvidia.com/gpu: "1"` in both container resource requests and limits.
-
-The deployment defaults to:
-
-```text
-replicas: 0
-```
-
-This keeps GPU quota unused while idle. Scaling to `1` is an operational action
-during a booked GPU window:
-
-```bash
-oc scale deployment/datasight-vllm-gpu --replicas=1
-```
-
-After scaling, confirm DSRI attached the GPU to the running container:
-
-```bash
-oc exec -n ub-datasight deployment/datasight-vllm-gpu -- nvidia-smi
-```
-
-If the live deployment was created before GPU resources were added, patch it
-after the DSRI booking is active:
-
-```bash
-oc patch deployment/datasight-vllm-gpu -n ub-datasight --type=json -p='[{"op":"replace","path":"/spec/template/spec/containers/0/resources","value":{"requests":{"cpu":"4","memory":"32Gi","nvidia.com/gpu":"1"},"limits":{"cpu":"16","memory":"128Gi","nvidia.com/gpu":"1"}}}]'
-```
-
-On Windows PowerShell, use escaped double quotes instead of single quotes if
-your shell cannot parse the JSON patch.
-
-After testing:
-
-```bash
-oc scale deployment/datasight-vllm-gpu --replicas=0
-```
 
 ## Required Environment
 
@@ -218,8 +102,9 @@ model. Keep this model until `/health`, `/v1/models`, and one tiny chat request
 work through the CPU gateway.
 
 ## Gateway Integration
+> To connect the GPU backend to the CPU gateway
 
-In the `datasight-llm-server` deployment, set:
+In the `datasight-llm-server` deployment, set env variables:
 
 ```text
 LLM_BACKEND_URL=http://datasight-vllm-gpu:8000
@@ -232,33 +117,7 @@ If backend-side auth is added to vLLM, set this only on the CPU gateway:
 LLM_BACKEND_API_KEY=<backend-secret>
 ```
 
-Do not expose this backend secret to public clients.
 
-Never assign `nvidia.com/gpu` to `datasight-llm-server`.
-
-## Operations
-
-Normal idle state:
-
-```text
-datasight-llm-server replicas: 1
-datasight-vllm-gpu replicas: 0
-GPU quota used: 0
-```
-
-GPU booked test state:
-
-```text
-datasight-llm-server replicas: 1
-datasight-vllm-gpu replicas: 1
-GPU quota used: 1
-```
-
-After the test window:
-
-```text
-datasight-vllm-gpu replicas: 0
-```
 
 ## Validation Checklist
 
