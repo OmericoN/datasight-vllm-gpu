@@ -6,6 +6,7 @@ PORT="${PORT:-8000}"
 VLLM_MODEL="${VLLM_MODEL:-Qwen/Qwen2.5-0.5B-Instruct}"
 SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-${VLLM_MODEL}}"
 VLLM_DTYPE="${VLLM_DTYPE:-auto}"
+VLLM_START_MODE="${VLLM_START_MODE:-hold}"
 
 export HF_HOME="${HF_HOME:-/hf-cache}"
 export HUGGINGFACE_HUB_CACHE="${HUGGINGFACE_HUB_CACHE:-${HF_HOME}/hub}"
@@ -62,6 +63,12 @@ echo "TRITON_CACHE_DIR=${TRITON_CACHE_DIR}"
 echo "TORCHINDUCTOR_CACHE_DIR=${TORCHINDUCTOR_CACHE_DIR}"
 echo "HOME=${HOME}"
 echo "VLLM_DTYPE=${VLLM_DTYPE}"
+echo "VLLM_START_MODE=${VLLM_START_MODE}"
+
+if [[ "${VLLM_START_MODE}" == "hold" ]]; then
+  echo "VLLM_START_MODE=hold: keeping container alive without starting vLLM."
+  exec tail -f /dev/null
+fi
 
 args=(
   --host "${HOST}"
@@ -77,4 +84,10 @@ if [[ -n "${VLLM_EXTRA_ARGS:-}" ]]; then
   args+=("${extra_args[@]}")
 fi
 
-exec python -m vllm.entrypoints.openai.api_server "${args[@]}"
+python_bin="$(command -v python || command -v python3 || true)"
+if [[ -z "${python_bin}" ]]; then
+  echo "ERROR: neither python nor python3 is available on PATH."
+  exit 127
+fi
+
+exec "${python_bin}" -m vllm.entrypoints.openai.api_server "${args[@]}"

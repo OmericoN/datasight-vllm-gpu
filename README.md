@@ -179,6 +179,18 @@ Optional:
 VLLM_EXTRA_ARGS=<additional vLLM CLI flags>
 ```
 
+Debug hold mode:
+
+```text
+VLLM_START_MODE=hold
+```
+
+In hold mode the entrypoint logs its environment and runs `tail -f /dev/null`.
+It does not start vLLM, call Python, or download a model. Use this to confirm
+that the image, OpenShift security context, PVC mount, and GPU scheduling keep a
+pod alive. Set `VLLM_START_MODE=serve` to start vLLM again after the container
+runtime is validated.
+
 ## Gateway Integration
 
 In the `datasight-llm-server` deployment, set:

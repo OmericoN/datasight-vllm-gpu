@@ -31,6 +31,8 @@ spec:
               value: Qwen/Qwen2.5-0.5B-Instruct
             - name: VLLM_DTYPE
               value: auto
+            - name: VLLM_START_MODE
+              value: hold
             - name: HF_HOME
               value: /hf-cache
             - name: HUGGINGFACE_HUB_CACHE
@@ -54,22 +56,6 @@ spec:
               mountPath: /hf-cache
             - name: shm
               mountPath: /dev/shm
-          startupProbe:
-            httpGet:
-              path: /health
-              port: 8000
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 10
-            failureThreshold: 180
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8000
-            initialDelaySeconds: 120
-            periodSeconds: 10
-            timeoutSeconds: 10
-            failureThreshold: 12
           resources:
             requests:
               cpu: "4"
