@@ -30,19 +30,40 @@ CPU gateway.
 
 ### Starting the GPU Backend
 - Schedule a GPU time window via ['DSRI GPU Calendar'](https://dsri.maastrichtuniversity.nl/gpu-booking)
+- Confirm the live deployment requests a GPU:
+  ```bash
+  oc get deployment datasight-vllm-gpu -n ub-datasight \
+    -o jsonpath='{.spec.template.spec.containers[*].resources}{"\n"}'
+  oc describe resourcequota gpu-quota -n ub-datasight
+  ```
+  The deployment resources should include `nvidia.com/gpu: 1`, and quota should show `0/1` before starting.
+- If the live deployment is missing the GPU request, patch it once:
+  ```bash
+  oc set resources deployment/datasight-vllm-gpu -n ub-datasight \
+    --requests=nvidia.com/gpu=1 \
+    --limits=nvidia.com/gpu=1
+  ```
 - Start the GPU in `hold` mode (for safety):
   ```bash
   oc set env -n ub-datasight deployment/datasight-vllm-gpu VLLM_START_MODE=hold
   oc scale -n ub-datasight deployment/datasight-vllm-gpu --replicas=1
+  oc get pods -n ub-datasight -l app=datasight-vllm-gpu -w
   ```
-- Check GPU attachement:
+- Check GPU attachment:
   ```bash
   oc exec -n ub-datasight deployment/datasight-vllm-gpu -- sh -lc 'ls -l /dev/nvidia* 2>/dev/null || echo no-nvidia-devices'
+  ```
+  If this prints `no-nvidia-devices`, check whether the pod is using GPU quota:
+  ```bash
+  oc describe pod -n ub-datasight -l app=datasight-vllm-gpu
+  oc describe resourcequota gpu-quota -n ub-datasight
   ```
 - If GPU is available, switch to `serve mode` and restart rollout:
   ```bash
   oc set env -n ub-datasight deployment/datasight-vllm-gpu VLLM_START_MODE=serve
   oc rollout restart -n ub-datasight deployment/datasight-vllm-gpu
+  oc rollout status -n ub-datasight deployment/datasight-vllm-gpu
+  oc logs -n ub-datasight deployment/datasight-vllm-gpu --tail=100
   ```
 
 ### Gracefully Shutting Down GPU Service
@@ -53,7 +74,9 @@ CPU gateway.
 - Scale down to 0 replicas:
   ```bash
   oc scale -n ub-datasight deployment/datasight-vllm-gpu --replicas=0
+  oc describe resourcequota gpu-quota -n ub-datasight
   ```
+  The GPU quota should return to `0/1` after shutdown.
 
 
 
