@@ -13,7 +13,7 @@ ENV SERVED_MODEL_NAME=Qwen/Qwen2.5-0.5B-Instruct
 ENV HOST=0.0.0.0
 ENV PORT=8000
 ENV VLLM_DTYPE=auto
-ENV VLLM_START_MODE=hold
+ENV VLLM_START_MODE=serve
 
 COPY entrypoint-vllm.sh /entrypoint-vllm.sh
 RUN mkdir -p /hf-cache /tmp/hf-cache /tmp/xdg-cache /tmp/vllm-cache \
