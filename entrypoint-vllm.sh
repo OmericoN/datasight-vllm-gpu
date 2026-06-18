@@ -6,7 +6,6 @@ PORT="${PORT:-8000}"
 VLLM_MODEL="${VLLM_MODEL:-Qwen/Qwen2.5-0.5B-Instruct}"
 SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-${VLLM_MODEL}}"
 VLLM_DTYPE="${VLLM_DTYPE:-auto}"
-VLLM_DEVICE="${VLLM_DEVICE:-cuda}"
 VLLM_START_MODE="${VLLM_START_MODE:-serve}"
 
 export HF_HOME="${HF_HOME:-/hf-cache}"
@@ -68,7 +67,6 @@ echo "HOME=${HOME}"
 echo "USER=${USER}"
 echo "LOGNAME=${LOGNAME}"
 echo "VLLM_DTYPE=${VLLM_DTYPE}"
-echo "VLLM_DEVICE=${VLLM_DEVICE}"
 echo "VLLM_START_MODE=${VLLM_START_MODE}"
 
 if [[ "${VLLM_START_MODE}" == "hold" ]]; then
@@ -87,7 +85,6 @@ args=(
   --model "${VLLM_MODEL}"
   --served-model-name "${SERVED_MODEL_NAME}"
   --dtype "${VLLM_DTYPE}"
-  --device "${VLLM_DEVICE}"
   --download-dir "${HF_HOME}/models"
 )
 
