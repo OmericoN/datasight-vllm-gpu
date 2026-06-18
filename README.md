@@ -63,30 +63,62 @@ The container listens on `0.0.0.0:8000` and starts:
 python -m vllm.entrypoints.openai.api_server
 ```
 
-Default model:
-
-```text
-Qwen/Qwen2.5-32B-Instruct-AWQ
-```
-
-For first DSRI validation, temporarily override the deployment model with:
+Default validation model:
 
 ```text
 Qwen/Qwen2.5-0.5B-Instruct
 ```
 
-Switch to the 32B AWQ model only after image build, service discovery, PVC
-mounting, and gateway proxying are confirmed.
+This repository defaults to the small model because it is the fastest way to
+prove GPU scheduling, image pull, PVC mounting, service discovery, and vLLM
+startup during a booked GPU window.
+
+Target production model:
+
+```text
+Qwen/Qwen2.5-32B-Instruct-AWQ
+```
+
+Switch to the 32B AWQ model only after the small model is healthy through the
+CPU gateway.
+
+## CrashLoopBackOff Triage
+
+If the pod is scheduled, the image is pulled, and the container is started, then
+`CrashLoopBackOff` means the vLLM process is exiting. Get the previous
+container log before scaling down or redeploying:
+
+```bash
+oc logs -n ub-datasight deployment/datasight-vllm-gpu --previous
+```
+
+If the pod name is needed:
+
+```bash
+oc get pods -n ub-datasight -l app=datasight-vllm-gpu
+oc logs -n ub-datasight pod/<pod-name> --previous
+```
+
+Common first failures:
+
+- `/hf-cache` is not writable by OpenShift's arbitrary container UID. The
+  entrypoint now falls back to `/tmp/hf-cache` so startup can continue, but
+  persistent caching requires fixing PVC permissions.
+- The selected model is too large for the booked GPU or vLLM runtime settings.
+  Validate with `Qwen/Qwen2.5-0.5B-Instruct` first, then move to the 32B AWQ
+  model.
+- The image tag changed underneath `vllm/vllm-openai:latest`. Pin the base image
+  once a working runtime version is confirmed.
 
 ## OpenShift Project Namespace
 
 `dsri/deployment.yaml` currently references this internal OpenShift image:
 
 ```text
-image-registry.openshift-image-registry.svc:5000/datasight/datasight-vllm-gpu:latest
+image-registry.openshift-image-registry.svc:5000/ub-datasight/datasight-vllm-gpu:latest
 ```
 
-If the DSRI project namespace is not `datasight`, replace the namespace segment
+If the DSRI project namespace is not `ub-datasight`, replace the namespace segment
 before deploying:
 
 ```text
@@ -127,12 +159,18 @@ oc scale deployment/datasight-vllm-gpu --replicas=0
 ```text
 HOST=0.0.0.0
 PORT=8000
-VLLM_MODEL=Qwen/Qwen2.5-32B-Instruct-AWQ
-SERVED_MODEL_NAME=Qwen/Qwen2.5-32B-Instruct-AWQ
+VLLM_MODEL=Qwen/Qwen2.5-0.5B-Instruct
+SERVED_MODEL_NAME=Qwen/Qwen2.5-0.5B-Instruct
 VLLM_DTYPE=auto
 HF_HOME=/hf-cache
 HUGGINGFACE_HUB_CACHE=/hf-cache/hub
 TRANSFORMERS_CACHE=/hf-cache/transformers
+XDG_CACHE_HOME=/hf-cache/xdg
+VLLM_CACHE_ROOT=/hf-cache/vllm
+TRITON_CACHE_DIR=/hf-cache/triton
+TORCHINDUCTOR_CACHE_DIR=/hf-cache/torchinductor
+HOME=/tmp
+PYTHONPYCACHEPREFIX=/tmp/pycache
 ```
 
 Optional:

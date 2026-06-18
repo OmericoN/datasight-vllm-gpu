@@ -3,15 +3,50 @@ set -e
 
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8000}"
-VLLM_MODEL="${VLLM_MODEL:-Qwen/Qwen2.5-32B-Instruct-AWQ}"
+VLLM_MODEL="${VLLM_MODEL:-Qwen/Qwen2.5-0.5B-Instruct}"
 SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-${VLLM_MODEL}}"
 VLLM_DTYPE="${VLLM_DTYPE:-auto}"
 
 export HF_HOME="${HF_HOME:-/hf-cache}"
 export HUGGINGFACE_HUB_CACHE="${HUGGINGFACE_HUB_CACHE:-${HF_HOME}/hub}"
 export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-${HF_HOME}/transformers}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-${HF_HOME}/xdg}"
+export VLLM_CACHE_ROOT="${VLLM_CACHE_ROOT:-${HF_HOME}/vllm}"
+export TRITON_CACHE_DIR="${TRITON_CACHE_DIR:-${HF_HOME}/triton}"
+export TORCHINDUCTOR_CACHE_DIR="${TORCHINDUCTOR_CACHE_DIR:-${HF_HOME}/torchinductor}"
+export HOME="${HOME:-/tmp}"
+export PYTHONPYCACHEPREFIX="${PYTHONPYCACHEPREFIX:-/tmp/pycache}"
 
-mkdir -p "${HF_HOME}" "${HUGGINGFACE_HUB_CACHE}" "${TRANSFORMERS_CACHE}"
+ensure_writable_cache() {
+  local cache_root="$1"
+
+  mkdir -p "${cache_root}" \
+    "${cache_root}/hub" \
+    "${cache_root}/transformers" \
+    "${cache_root}/xdg" \
+    "${cache_root}/vllm" \
+    "${cache_root}/triton" \
+    "${cache_root}/torchinductor" || return 1
+
+  local probe_file="${cache_root}/.write-test"
+  touch "${probe_file}" || return 1
+  rm -f "${probe_file}" || return 1
+}
+
+if ! ensure_writable_cache "${HF_HOME}"; then
+  echo "WARNING: ${HF_HOME} is not writable by uid $(id -u). Falling back to /tmp/hf-cache."
+  echo "WARNING: model cache will not persist until the PVC permissions are fixed."
+  export HF_HOME="/tmp/hf-cache"
+  export HUGGINGFACE_HUB_CACHE="${HF_HOME}/hub"
+  export TRANSFORMERS_CACHE="${HF_HOME}/transformers"
+  export XDG_CACHE_HOME="${HF_HOME}/xdg"
+  export VLLM_CACHE_ROOT="${HF_HOME}/vllm"
+  export TRITON_CACHE_DIR="${HF_HOME}/triton"
+  export TORCHINDUCTOR_CACHE_DIR="${HF_HOME}/torchinductor"
+  ensure_writable_cache "${HF_HOME}"
+fi
+
+mkdir -p "${HOME}" "${PYTHONPYCACHEPREFIX}"
 
 echo "Starting DataSight vLLM GPU backend..."
 echo "HOST=${HOST}"
@@ -21,12 +56,25 @@ echo "SERVED_MODEL_NAME=${SERVED_MODEL_NAME}"
 echo "HF_HOME=${HF_HOME}"
 echo "HUGGINGFACE_HUB_CACHE=${HUGGINGFACE_HUB_CACHE}"
 echo "TRANSFORMERS_CACHE=${TRANSFORMERS_CACHE}"
+echo "XDG_CACHE_HOME=${XDG_CACHE_HOME}"
+echo "VLLM_CACHE_ROOT=${VLLM_CACHE_ROOT}"
+echo "TRITON_CACHE_DIR=${TRITON_CACHE_DIR}"
+echo "TORCHINDUCTOR_CACHE_DIR=${TORCHINDUCTOR_CACHE_DIR}"
+echo "HOME=${HOME}"
 echo "VLLM_DTYPE=${VLLM_DTYPE}"
 
-exec python -m vllm.entrypoints.openai.api_server \
-  --host "${HOST}" \
-  --port "${PORT}" \
-  --model "${VLLM_MODEL}" \
-  --served-model-name "${SERVED_MODEL_NAME}" \
-  --dtype "${VLLM_DTYPE}" \
-  ${VLLM_EXTRA_ARGS:-}
+args=(
+  --host "${HOST}"
+  --port "${PORT}"
+  --model "${VLLM_MODEL}"
+  --served-model-name "${SERVED_MODEL_NAME}"
+  --dtype "${VLLM_DTYPE}"
+  --download-dir "${HF_HOME}/models"
+)
+
+if [[ -n "${VLLM_EXTRA_ARGS:-}" ]]; then
+  read -r -a extra_args <<< "${VLLM_EXTRA_ARGS}"
+  args+=("${extra_args[@]}")
+fi
+
+exec python -m vllm.entrypoints.openai.api_server "${args[@]}"
